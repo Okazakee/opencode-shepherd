@@ -54,6 +54,10 @@ DEBOUNCE_SECONDS = 2
 FOLLOWUP_SECONDS = 65  # FRESH_GRACE + margin
 
 # Event types that wake an evaluation in --events mode (prefix match).
+# Verified against a live SSE capture (v2 stream): turn boundaries arrive as
+# session.execution.succeeded/failed/interrupted; prompt/question delivery as
+# session.inbox.*; session.idle / form.* / permission.* kept for other
+# transports and future versions.
 TRIGGER_PREFIXES = (
     "session.idle",
     "session.error",
@@ -61,6 +65,7 @@ TRIGGER_PREFIXES = (
     "session.execution.interrupted",
     "session.execution.succeeded",
     "session.compaction.failed",
+    "session.inbox.",
     "permission.",
     "form.",
     "session.form.",
