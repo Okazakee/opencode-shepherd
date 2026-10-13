@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "opencode-shepherd",
-  "version": "0.2.3",
-  "description": "Watch over opencode sessions and respond when they need you — alerts for stopped turns, pending questions and permission requests, and a dependency-free CLI to reply from anywhere.",
+  "version": "0.2.4",
+  "description": "A Hermes Agent plugin that watches over opencode sessions: alerts when a turn stops, a question waits or a permission is requested, plus a dependency-free CLI to reply from anywhere.",
   "author": {
     "name": "okazakee",
     "url": "https://github.com/okazakee"

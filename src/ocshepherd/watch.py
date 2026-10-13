@@ -1,6 +1,6 @@
 """Watch successive snapshots and emit alerts only for NEW events.
 
-Alert semantics (deliberately conservative — silence is the norm):
+Alert semantics (deliberately conservative: silence is the norm):
 
   ❓  a session has a pending question form (the agent used the `question` tool)
   🔐  a session has a pending permission request
@@ -143,7 +143,9 @@ def _form_payload(s, form):
 
 def _perm_payload(s, perm):
     resources = " | ".join(perm.get("resources") or [])[:180]
-    body = "%s — %s" % (perm.get("action") or "?", resources)
+    body = perm.get("action") or "?"
+    if resources:
+        body += " (%s)" % resources
     if perm.get("message"):
         body += "\n    %s" % perm["message"][:200]
     return {
@@ -163,12 +165,12 @@ def _initial_line(payload):
     if kind == "form":
         return '❓ "%s"%s asks:\n%s' % (title, sub, body)
     if kind == "perm":
-        return '🔐 "%s"%s — permission requested: %s' % (title, sub, body)
+        return '🔐 "%s"%s requests permission: %s' % (title, sub, body)
     if kind == "idle":
         tail = ("\n    Last: “%s”" % body[:220]) if body else ""
-        return '⏸️ "%s" — turn finished, waiting for input.%s' % (title, tail)
+        return '⏸️ "%s": turn finished, waiting for input.%s' % (title, tail)
     if kind == "idle-error":
-        return '⚠️ "%s" — turn ended (%s).\n    %s' % (title, payload.get("outcome"), body[:220])
+        return '⚠️ "%s": turn ended (%s).\n    %s' % (title, payload.get("outcome"), body[:220])
     return title
 
 
@@ -179,7 +181,7 @@ def _reminder_line(payload, now):
     body = payload.get("body") or ""
     if payload.get("kind") == "idle":
         tail = ("\n    Last: “%s”" % body[:160]) if body else ""
-        return '⏰ Still waiting (%dm): "%s" — turn finished.%s' % (mins, title, tail)
+        return '⏰ Still waiting (%dm): "%s" (turn finished).%s' % (mins, title, tail)
     return '⏰ Still waiting (%dm): "%s"\n%s' % (mins, title, body)
 
 
@@ -310,7 +312,7 @@ def check(snapshot, state, now_ms=None, snippet=SNIPPET, remind_after_minutes=No
         lines = [_summary_line(e, now) for key, e in new_open.items()
                  if key not in alerted_keys]
         if lines:
-            alerts.insert(0, "▶️ shepherd resumed — waiting on you:\n" + "\n".join(lines))
+            alerts.insert(0, "▶️ shepherd resumed. Waiting on you:\n" + "\n".join(lines))
         for entry in new_open.values():
             entry["last"] = now
 

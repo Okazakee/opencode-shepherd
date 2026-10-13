@@ -68,7 +68,7 @@ def resolve_or_die(client, fragment):
     if session:
         return session
     if candidates:
-        print("Ambiguous fragment %r — candidates:" % fragment, file=sys.stderr)
+        print("Ambiguous fragment %r; candidates:" % fragment, file=sys.stderr)
         for s in candidates[:10]:
             print("  %s  %s" % (s.get("id"), s.get("title") or ""), file=sys.stderr)
         sys.exit(2)
@@ -213,7 +213,7 @@ def cmd_form_reply(args):
             die("--answer expects key=value, got %r" % pair)
         answer[key] = value
     if not answer:
-        print("pending form %s — provide --answer key=value (or --json):" % form.get("id"))
+        print("pending form %s; provide --answer key=value (or --json):" % form.get("id"))
         print(json.dumps(form, indent=1, ensure_ascii=False))
         return
     result = client.answer_form(session["id"], form["id"], answer)
@@ -395,7 +395,7 @@ def cmd_close(args):
     client = make_client(args)
     session = resolve_or_die(client, args.fragment)
     if not args.yes:
-        print("would delete: %s  %r — re-run with --yes to confirm" % (
+        print("would delete: %s  %r; re-run with --yes to confirm" % (
             session["id"], session.get("title") or ""))
         return
     client.delete_session(session["id"])

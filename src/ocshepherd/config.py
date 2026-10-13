@@ -1,7 +1,7 @@
 """Config file handling for opencode-shepherd.
 
 Optional, user-editable settings live in ``~/.config/ocshepherd/config.json``
-(respecting ``$XDG_CONFIG_HOME``). Everything is optional — missing file or
+(respecting ``$XDG_CONFIG_HOME``). Everything is optional; a missing file or
 missing keys fall back to defaults. ``watch`` reads the file fresh on each
 evaluation, so ``ocshepherd config set ...`` takes effect live.
 

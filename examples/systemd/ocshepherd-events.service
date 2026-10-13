@@ -6,7 +6,7 @@ After=network-online.target
 Type=simple
 Environment=PYTHONUNBUFFERED=1
 # Put OCSHEPHERD_TELEGRAM_TOKEN / OCSHEPHERD_TELEGRAM_CHAT (or other config)
-# in ~/.config/ocshepherd.env — or set them via `ocshepherd config set`.
+# in ~/.config/ocshepherd.env, or set them via `ocshepherd config set`.
 EnvironmentFile=-%h/.config/ocshepherd.env
 ExecStart=%h/.local/bin/ocshepherd watch --events --quiet
 Restart=always

@@ -1,4 +1,4 @@
-# opencode-shepherd — crontab examples
+# opencode-shepherd crontab examples
 # ------------------------------------
 # `ocshepherd watch` is a one-shot check: run it from cron (or a systemd
 # timer) and it notifies only when something NEW happens.

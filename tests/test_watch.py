@@ -76,7 +76,7 @@ class CheckTests(unittest.TestCase):
         }])
         alerts = check(snap([s]), st, now_ms=NOW)
         self.assertEqual(len(alerts), 1)
-        self.assertIn("permission requested", alerts[0])
+        self.assertIn("requests permission", alerts[0])
         self.assertIn("rm -rf /tmp/x", alerts[0])
 
     def test_background_shell_never_alerts(self):

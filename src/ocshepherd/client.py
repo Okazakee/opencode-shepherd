@@ -242,7 +242,7 @@ class EventStream:
     Runs a daemon thread that keeps a streaming connection alive and pushes
     parsed event dicts into a queue. On disconnect it pushes
     ``{"type": "_disconnect", "error": ...}`` and reconnects with backoff.
-    ``server.connected`` is emitted by the server on (re)connect — callers can
+    ``server.connected`` is emitted by the server on (re)connect; callers can
     treat it as "do a full resync". Heartbeat comment lines are ignored.
     """
 

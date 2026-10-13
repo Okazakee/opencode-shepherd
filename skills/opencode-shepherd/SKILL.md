@@ -62,7 +62,7 @@ Settings (optional, live-reloaded from `~/.config/ocshepherd/config.json`):
 `enabled` (pause/resume notifications; on resume a recap lists what is
 waiting), `remind_after_minutes` (re-notify while something waits),
 `telegram_token`/`telegram_chat`, `notify_cmd`, `resync_minutes`,
-`min_interval_seconds` — manage with `ocshepherd config set KEY VALUE`.
+`min_interval_seconds`; manage with `ocshepherd config set KEY VALUE`.
 
 ### Setting it up where opencode runs (for the agent)
 
@@ -97,7 +97,7 @@ Alert semantics (why silence is the norm):
 
 ## Credentials
 
-Auto-discovered, in order — URL: `--url` → `$OCSHEPHERD_URL` →
+Auto-discovered, in order. URL: `--url` → `$OCSHEPHERD_URL` →
 `opencode service status` → `http://127.0.0.1:4096`. Password: `--password` →
 `$OCSHEPHERD_PASSWORD` → `~/.config/opencode/service.json` →
 `$OPENCODE_SERVER_PASSWORD`. Username defaults to `opencode`.
@@ -108,6 +108,6 @@ Never print the password; never bind the opencode server beyond localhost.
 - `send` steers by default: the message is delivered immediately, even
   mid-turn. Use `--queue` to deliver after the current turn ends. Pick per
   the user's intent.
-- `perm once/always` and question answers are real approvals — relay exactly
+- `perm once/always` and question answers are real approvals; relay exactly
   what the user decided, nothing more.
 - Prefer `resolve` before acting when the fragment could be ambiguous.
