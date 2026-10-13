@@ -1,0 +1,23 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "opencode-shepherd",
+  "version": "0.1.0",
+  "description": "Watch over opencode sessions and respond when they need you — alerts for stopped turns, pending questions and permission requests, and a dependency-free CLI to reply from anywhere.",
+  "author": {
+    "name": "okazakee",
+    "url": "https://github.com/okazakee"
+  },
+  "homepage": "https://github.com/okazakee/opencode-shepherd",
+  "repository": "https://github.com/okazakee/opencode-shepherd",
+  "license": "MIT",
+  "keywords": [
+    "opencode",
+    "agent-sessions",
+    "monitoring",
+    "watchdog",
+    "notifications",
+    "hermes",
+    "hermes-agent",
+    "skill"
+  ]
+}

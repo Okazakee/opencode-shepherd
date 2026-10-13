@@ -1,158 +1,143 @@
 # 🐑 opencode-shepherd
 
-**Watch over [opencode](https://opencode.ai) sessions from anywhere — know when they stop, ask a question, or request a permission, and answer them.**
-A dependency-free CLI (Python stdlib only) that talks to the opencode server API — locally, from cron/scripts, or over SSH.
+**Keep an eye on your [opencode](https://opencode.ai) sessions from anywhere — know when they stop, ask a question, or need a permission, and answer them without a UI.**
 
----
+A tiny, dependency-free Python CLI (standard library only). Works locally, over SSH, and as a [Hermes](https://github.com/NousResearch/hermes-agent) plugin.
+
+```text
+   sessions on your dev box              you, anywhere
+  ┌────────────────────────┐          ┌────────────────────────────┐
+  │ opencode server (v2)   │   ssh    │ ocshepherd watch           │
+  │ (same API as the TUI)  │ ◄──────► │   → Telegram / terminal    │
+  └────────────────────────┘          │ ocshepherd send / perm / … │
+                                      └────────────────────────────┘
+```
 
 ## Why
 
-Agentic coding sessions run for a long time. They stop silently when a turn ends, block on questions ("Remove PD for Phase B?"), and pause for permission requests. If opencode is running on your dev box and you're somewhere else, a notification alone is not enough: you want to **act**.
+Long agent sessions behave like a slow colleague: they finish a step and wait, they ask before doing something risky, they block on a question. If opencode runs on another machine, you find out too late — and a notification you can't reply to doesn't help. `ocshepherd` does both halves:
 
-`ocshepherd` gives you both sides:
-
-- **watch** — alerts you (stdout / Telegram / any command) only when something *new* happens: a session finished its turn, asked a question, or requests a permission. No duplicates, no noise. It understands when a session is waiting on a *background job* and stays silent because opencode will resume it by itself.
-- **act** — send messages into sessions (steer into the current turn or queue for after it), answer the question forms, allow/deny permission requests — from any machine, with no UI and nothing exposed.
-
-## How it works
-
-```text
-    machine running opencode                          anywhere (VPS, CI, laptop)
- ┌───────────────────────────────┐   ssh + stdout   ┌───────────────────────────────┐
- │  opencode serve (v2 API)      │ ◄──── pipe ───── │  ocshepherd watch --stdin     │
- │  127.0.0.1:<port> basic auth  │                  │   → Telegram / stdout / cmd   │
- │        ▲                      │                  │                               │
- │        │ HTTP (local)         │                  │  ocshepherd send / perm /     │
- │  ocshepherd snapshot          │ ◄──────────────► │             form-reply        │
- └───────────────────────────────┘      ssh         └───────────────────────────────┘
-```
-
-- opencode exposes its sessions through the server API (the same one the TUI and the web UI use). `ocshepherd` is just another API client.
-- A **snapshot** is plain JSON: sessions, pending questions/permissions, last activity, background-job status. Because it is JSON, it pipes cleanly over SSH — the diffing/notifying side can live on a completely different machine.
-- Nothing is opened to the network: the server stays on `127.0.0.1`, and the tool never listens on any port.
-
-## Requirements
-
-- **opencode v2** running (`opencode serve`, the background service, or the TUI that embeds a server). Tested with **v2.0.28**. The older v1 server API is different and not supported.
-- **Python ≥ 3.9** — standard library only, nothing to compile.
-- For remote use: SSH access to the machine running opencode (and `ocshepherd` installed there — or just use the remote `snapshot` pipe).
+1. **Watch** — tells you only when something **new** needs attention.
+2. **Reply** — send messages, answer questions, allow or deny permissions — from wherever you are.
 
 ## Install
 
 ```bash
-# pipx (recommended)
-pipx install git+https://github.com/okazakee/opencode-shepherd
-
-# or pip
+pipx install git+https://github.com/okazakee/opencode-shepherd   # recommended
+# or
 pip install git+https://github.com/okazakee/opencode-shepherd
-
-# or from a checkout, no install:
-PYTHONPATH=src python3 -m ocshepherd --help
 ```
 
-## Credentials & discovery
+- Requires **Python ≥ 3.9** and a running **opencode v2** (`opencode serve`,
+  the background service, or a TUI — tested with v2.0.28).
+- Credentials are found automatically (see [Good to know](#good-to-know)).
 
-The tool needs the server URL and password, and finds both automatically:
-
-| What | Resolution order |
-|---|---|
-| URL | `--url` → `$OCSHEPHERD_URL` → `opencode service status` → `http://127.0.0.1:4096` |
-| Password | `--password` → `$OCSHEPHERD_PASSWORD` → `~/.config/opencode/service.json` → `$OPENCODE_SERVER_PASSWORD` |
-| Username | `--username` → `$OCSHEPHERD_USERNAME` → `$OPENCODE_SERVER_USERNAME` → `opencode` |
-
-(`service.json` is where the opencode background service stores its generated password; `OPENCODE_SERVER_PASSWORD` is the one you set yourself when starting `opencode serve` manually.)
-
-## Quick start
+## 30-second tour
 
 ```bash
-ocshepherd ping                      # is the server reachable?
-ocshepherd list                      # recent sessions, RUNNING/child flags
-ocshepherd tail fix-auth 20          # last messages of a session (id or title fragment)
+ocshepherd ping                 # is the server reachable?
+ocshepherd list                 # your recent sessions
+ocshepherd tail fix-auth 20     # what happened lately in a session
 ocshepherd send fix-auth "also add a test for the empty case"
-ocshepherd watch                     # one-shot check: exits silently if nothing new
+ocshepherd watch                # one check; silent if nothing new
 ```
 
-## Watching (cron, systemd, anywhere)
+## Get notified (`watch`)
 
-`watch` is a one-shot check — schedule it (every 2 minutes is a good default) and it stays quiet unless something new needs attention:
-
-```bash
-# local machine
-*/2 * * * * /usr/local/bin/ocshepherd watch
-
-# with Telegram notifications, silent stdout
-*/2 * * * * OCSHEPHERD_TELEGRAM_TOKEN=... OCSHEPHERD_TELEGRAM_CHAT=... /usr/local/bin/ocshepherd watch --quiet
-
-# remote machine over SSH: snapshot remotely, diff + notify locally
-*/2 * * * * ssh devbox ocshepherd snapshot | ocshepherd watch --stdin --quiet
-```
-
-- `--loop 120` keeps it running in the foreground (for a systemd service without a timer).
-- More examples in [`examples/`](examples/): crontab lines, a systemd service + timer, an `ntfy.sh` notify wrapper.
-- State (what has already been reported) lives in `~/.local/state/ocshepherd/watch-state.json`; override with `--state`. The first run only seeds the state; pending questions/permissions found on the first run *are* reported.
-
-### What triggers an alert
+Schedule `watch` (every couple of minutes is a good default); it stays quiet unless something new happens.
 
 | Alert | Meaning |
 |---|---|
-| ⏸️ | a top-level session **finished its turn** and is waiting for input |
-| ❓ | a session has a **pending question** (the agent used the `question` tool) |
-| 🔐 | a session has a **pending permission request** |
-| ⚠️ | a turn ended with outcome **failed/interrupted**, or the server has been unreachable for 3 consecutive runs |
-
-Deliberately silent: sessions **waiting on a background shell** (opencode resumes them automatically when it exits), and sub-sessions finishing (their parent will report).
-
-### Notification sinks
-
-- **stdout** (default; combine with cron mail, or a pipe of your choice)
-- **Telegram** — `--telegram-token` + `--telegram-chat` (or `OCSHEPHERD_TELEGRAM_TOKEN` / `OCSHEPHERD_TELEGRAM_CHAT`)
-- **any command** — `--notify-cmd 'my-script'`: the alert text is piped to its stdin (ntfy, webhooks, mail, …)
-- `--quiet` suppresses stdout when you only want one of the above.
-
-## Responding to a session
+| ⏸️ | a session finished its turn and waits for input |
+| ❓ | a session is asking a question |
+| 🔐 | a session requests a permission |
+| ⚠️ | a turn failed — or the server has been unreachable for several checks |
 
 ```bash
-ocshepherd send fix-auth "text..."        # steer (delivered immediately, even mid-turn)
-ocshepherd send fix-auth "text..." --queue  # deliver after the current turn ends
-ocshepherd send fix-auth --file prompt.md   # multiline from a file
-cat prompt.md | ocshepherd send fix-auth --stdin
+# cron: local machine
+*/2 * * * * /usr/local/bin/ocshepherd watch
 
-ocshepherd forms fix-auth                  # inspect pending questions
-ocshepherd form-reply fix-auth --answer q0="PD connected"
+# cron: Telegram notifications, silent stdout
+*/2 * * * * OCSHEPHERD_TELEGRAM_TOKEN=... OCSHEPHERD_TELEGRAM_CHAT=... /usr/local/bin/ocshepherd watch --quiet
 
-ocshepherd perms fix-auth                  # inspect pending permissions
-ocshepherd perm fix-auth once              # once | always | reject  (--message ...)
-
-ocshepherd resolve fix-auth                # what does this fragment match?
+# cron: remote machine over SSH — snapshot remotely, diff + notify locally
+*/2 * * * * ssh devbox ocshepherd snapshot | ocshepherd watch --stdin --quiet
 ```
 
-Session **fragments** match either a session id (substring, case-insensitive) or a title substring (case-insensitive). Ambiguous fragments print the candidates and exit with code 2.
+- Notifications go to **stdout**, **Telegram** (`--telegram-token/--telegram-chat`), or **any command** (`--notify-cmd`, alert text on stdin — ntfy, webhooks, mail…).
+- `--loop 120` keeps it running (for a systemd service without a timer).
+- Examples in [`examples/`](examples/): crontab, systemd unit + timer, ntfy wrapper.
+- It knows the difference between "waiting for you" and "waiting for a background job" — the latter is never reported, because opencode resumes those sessions by itself.
 
-Remote use is the same commands over SSH:
+## Reply to a session
 
 ```bash
-ssh devbox ocshepherd list
+ocshepherd send fix-auth "text..."          # delivered immediately (steer)
+ocshepherd send fix-auth "text..." --queue  # delivered after the current turn
+ocshepherd send fix-auth --file prompt.md   # multiline
+cat prompt.md | ocshepherd send fix-auth --stdin
+
+ocshepherd forms fix-auth                   # pending questions
+ocshepherd form-reply fix-auth --answer q0="PD connected"
+
+ocshepherd perms fix-auth                   # pending permissions
+ocshepherd perm fix-auth once               # once | always | reject
+
+ocshepherd resolve fix-auth                 # what does this fragment match?
+```
+
+Sessions are addressed by a **fragment**: part of the session id or part of the title (case-insensitive). Ambiguous fragments print the candidates instead of guessing.
+
+## Over SSH (remote machines)
+
+Snapshots are plain JSON, so you can pipe them straight over SSH — nothing exposed, no new ports:
+
+```bash
+ssh devbox ocshepherd snapshot | ocshepherd watch --stdin   # watch from here
+ssh devbox ocshepherd list                                  # or act remotely
 ssh devbox ocshepherd send fix-auth "text..."
 ```
 
-## Security notes
+## Using it with Hermes (plugin)
 
-- The tool never listens on a port and never proxies anything: it only makes HTTP calls to the local server (or, in remote setups, runs over your existing SSH).
-- Credentials are read from the environment or from the same file opencode itself uses; they are never printed or logged. Avoid `--password` on shared machines (visible in the process list) — prefer the env var or `service.json`.
-- `perm once/always` and question answers are real approvals. Treat them with the same care as clicking approve in the TUI.
+This repo is also a portable **Agent Plugin** (skills-only): it teaches a [Hermes](https://github.com/NousResearch/hermes-agent) agent how to use `ocshepherd`, so your agent can watch, summarise and answer sessions for you.
 
-## Compatibility & caveats
+```bash
+hermes plugins install okazakee/opencode-shepherd
+```
 
-- Built against the **opencode v2 HTTP API** (the spec is served at `http://<host>:<port>/doc`). Tested with v2.0.28. The API is young: expect occasional breaking changes — pin your opencode version if you rely on this in automation, and check the spec after upgrades.
-- Escape hatch: the opencode CLI can call its own server — `opencode api GET /api/session`.
-- Not affiliated with the opencode project.
+## All commands
+
+| Command | What it does |
+|---|---|
+| `ping` | check connectivity + server info |
+| `list` | recent sessions (`RUNNING` / `child` flags) |
+| `tail <frag> [n]` | last messages of a session |
+| `send <frag> ...` | send a message (`--queue`, `--file`, `--stdin`) |
+| `forms <frag>` / `form-reply <frag>` | inspect / answer pending questions |
+| `perms <frag>` / `perm <frag> ...` | inspect / reply to permission requests |
+| `resolve <frag>` | resolve a fragment to a session |
+| `snapshot` | full JSON snapshot (for piping / your own tooling) |
+| `watch` | the checks that produce notifications |
+
+## Good to know
+
+- **Credentials** are auto-discovered: URL from `$OCSHEPHERD_URL` → `opencode service status` → `http://127.0.0.1:4096`; password from `$OCSHEPHERD_PASSWORD` → `~/.config/opencode/service.json` → `$OPENCODE_SERVER_PASSWORD`; username defaults to `opencode`. Override with `--url/--password/--username`.
+- **steer vs queue**: `send` steers by default (delivered even mid-turn); `--queue` waits for the current turn to end.
+- **Repeat safety**: alerts are deduplicated by event id, and the first `watch` run only seeds state — no old noise.
+- **API caveats**: built and tested against the opencode **v2** server API (spec at `http://<host>:<port>/doc`). The API is young; if your version is newer, check the spec after upgrades. The v1 server API is not supported. Escape hatch: `opencode api GET /api/session`.
+
+## Security
+
+- Nothing listens and nothing is exposed: the tool only calls the opencode server over HTTP (or runs over your existing SSH).
+- Credentials are never printed or logged. On shared machines prefer the env var or `service.json` over `--password` (visible in the process list).
+- `perm`/`form-reply` are real approvals — treat them like clicking approve in the TUI.
 
 ## Related tools
 
-- `opencode web` / `opencode pair` / `opencode attach` — full interactive web/TUI clients; use them when you want to *drive* sessions manually with a UI (mind exposure if you bind beyond localhost).
-- [opencode-notify](https://github.com/kdcokenny/opencode-notify) — native OS notifications on the machine running opencode; great when you're near that machine.
-- `@opencode-ai/sdk` — official TypeScript SDK, if you're building JS/TS integrations.
-- **ocshepherd** — headless, scriptable *watch + relay*: notifications you can act on, from anywhere, in about 400 lines of Python.
+- `opencode web` / `opencode pair` / `opencode attach` — full interactive UIs; use them to drive sessions by hand.
+- [opencode-notify](https://github.com/kdcokenny/opencode-notify) — OS notifications on the machine running opencode.
+- `@opencode-ai/sdk` — the official TypeScript SDK for JS/TS integrations.
 
 ## Development
 
