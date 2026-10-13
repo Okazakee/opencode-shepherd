@@ -32,6 +32,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -410,10 +411,19 @@ def run_events(client, get_settings, emit):
             alerts = [alert] if alert else []
             next_reminder = None
             retry_at = time.time() + 30
-        save_state(settings["state"], state)
         text = format_alerts(alerts)
+        delivered = True
         if text:
-            emit(text)
+            try:
+                emit(text)
+            except Exception as e:
+                # never lose an alert to a failing sink: skip saving the
+                # state so the next run re-detects the events and retries
+                delivered = False
+                retry_at = time.time() + 60
+                print("ocshepherd: emit failed: %s" % e, file=sys.stderr)
+        if delivered:
+            save_state(settings["state"], state)
 
 
 # -- notification sinks ----------------------------------------------------
