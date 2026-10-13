@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opencode-shepherd"
+version = "0.1.0"
+description = "Watch over opencode sessions and respond when they need you — a dependency-free CLI + watcher for the opencode v2 server."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "okazakee" }]
+keywords = ["opencode", "ai-agents", "monitoring", "watchdog", "cli", "automation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: System :: Monitoring",
+]
+
+[project.scripts]
+ocshepherd = "ocshepherd.cli:main"
+
+[project.urls]
+Repository = "https://github.com/okazakee/opencode-shepherd"
+Issues = "https://github.com/okazakee/opencode-shepherd/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]

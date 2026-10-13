@@ -1,0 +1,18 @@
+# opencode-shepherd — crontab examples
+# ------------------------------------
+# `ocshepherd watch` is a one-shot check: run it from cron (or a systemd
+# timer) and it notifies only when something NEW happens.
+
+# 1) Local machine (opencode server on the same host), plain stdout.
+#    Cron will mail the output if your system is configured for that.
+*/2 * * * * /usr/local/bin/ocshepherd watch
+
+# 2) Local machine, Telegram notifications, silent stdout.
+*/2 * * * * OCSHEPHERD_TELEGRAM_TOKEN=123456:ABC-DEF OCSHEPHERD_TELEGRAM_CHAT=123456789 /usr/local/bin/ocshepherd watch --quiet
+
+# 3) Remote host over SSH: take the snapshot remotely, diff + notify locally.
+#    (Requires ocshepherd on both machines, and a working SSH key.)
+*/2 * * * * ssh devbox ocshepherd snapshot | OCSHEPHERD_TELEGRAM_TOKEN=123456:ABC-DEF OCSHEPHERD_TELEGRAM_CHAT=123456789 /usr/local/bin/ocshepherd watch --stdin --quiet
+
+# 4) Any custom notification route via --notify-cmd (here: ntfy.sh).
+*/2 * * * * /usr/local/bin/ocshepherd watch --quiet --notify-cmd "$HOME/bin/ntfy-notify.sh"

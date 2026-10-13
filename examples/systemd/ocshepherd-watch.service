@@ -1,0 +1,10 @@
+[Unit]
+Description=opencode-shepherd watch (one-shot check for opencode sessions that need attention)
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Put OCSHEPHERD_TELEGRAM_TOKEN / OCSHEPHERD_TELEGRAM_CHAT (or other config)
+# in ~/.config/ocshepherd.env
+EnvironmentFile=-%h/.config/ocshepherd.env
+ExecStart=/usr/local/bin/ocshepherd watch --quiet
