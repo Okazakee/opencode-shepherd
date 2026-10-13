@@ -430,7 +430,7 @@ def run_events(client, get_settings, emit):
 
 def notify_stdout(text):
     if text:
-        print(text)
+        print(text, flush=True)
 
 
 def notify_telegram(text, token, chat_id):
