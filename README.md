@@ -65,9 +65,45 @@ Schedule `watch` (every couple of minutes is a good default); it stays quiet unl
 ```
 
 - Notifications go to **stdout**, **Telegram** (`--telegram-token/--telegram-chat`), or **any command** (`--notify-cmd`, alert text on stdin — ntfy, webhooks, mail…).
-- `--loop 120` keeps it running (for a systemd service without a timer).
-- Examples in [`examples/`](examples/): crontab, systemd unit + timer, ntfy wrapper.
+- `--loop 120` keeps it running (polling), or use **event-driven mode**: `ocshepherd watch --events` streams the opencode event bus and only runs a check when something actually happens (turn boundaries, errors, permissions, questions; plus a periodic safety-net resync). Lighter and faster than polling.
+- Examples in [`examples/`](examples/): crontab, systemd unit + timer, event-daemon unit, ntfy wrapper.
 - It knows the difference between "waiting for you" and "waiting for a background job" — the latter is never reported, because opencode resumes those sessions by itself.
+
+### Reminders
+
+Don't want a question to sit unanswered for hours? Set a reminder interval and `watch` will re-notify while an item is still waiting:
+
+```bash
+ocshepherd config set remind_after_minutes 30   # reminders every 30 minutes while waiting
+```
+
+### Pause / resume notifications
+
+```bash
+ocshepherd config set enabled false   # pause: events are recorded silently
+ocshepherd config set enabled true    # resume: one recap of what's waiting right now
+```
+
+## Configuration
+
+Settings live in `~/.config/ocshepherd/config.json` (every key optional) and are read live — no restart needed:
+
+```bash
+ocshepherd config list
+ocshepherd config set telegram_token 123:ABC
+ocshepherd config unset remind_after_minutes
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | master switch; while off, events are recorded silently, with a recap when re-enabled |
+| `remind_after_minutes` | `null` | re-notify every N minutes while an item is still waiting |
+| `snippet` | `220` | max chars of last-message snippets |
+| `state` | XDG state | dedupe state file path |
+| `telegram_token` / `telegram_chat` | `null` | default Telegram sink |
+| `notify_cmd` | `null` | command receiving alerts on stdin |
+| `resync_minutes` | `30` | `--events`: full-check safety net interval |
+| `min_interval_seconds` | `15` | `--events`: minimum gap between checks |
 
 ## Reply to a session
 
@@ -87,6 +123,15 @@ ocshepherd resolve fix-auth                 # what does this fragment match?
 ```
 
 Sessions are addressed by a **fragment**: part of the session id or part of the title (case-insensitive). Ambiguous fragments print the candidates instead of guessing.
+
+## Sessions (create, abort, close)
+
+```bash
+ocshepherd new --dir ~/work/proj --title "notes" --prompt "summarise this repo"
+ocshepherd abort fix-auth        # interrupt a running turn
+ocshepherd close fix-auth        # show what would be deleted
+ocshepherd close fix-auth --yes  # actually delete the session (and its children)
+```
 
 ## Over SSH (remote machines)
 
@@ -118,7 +163,9 @@ hermes plugins install okazakee/opencode-shepherd
 | `perms <frag>` / `perm <frag> ...` | inspect / reply to permission requests |
 | `resolve <frag>` | resolve a fragment to a session |
 | `snapshot` | full JSON snapshot (for piping / your own tooling) |
-| `watch` | the checks that produce notifications |
+| `watch` | the checks that produce notifications (`--events` for event-driven) |
+| `config` | show / change persistent settings (`enabled`, reminders, sinks) |
+| `new` / `abort` / `close` | create / interrupt / delete sessions |
 
 ## Good to know
 

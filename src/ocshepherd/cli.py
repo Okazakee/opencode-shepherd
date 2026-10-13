@@ -10,6 +10,7 @@ import time
 
 from . import __version__
 from .client import Client, ShepherdError, format_ms
+from .config import coerce, load_config, save_config
 from .snapshot import build_snapshot
 from .watch import (
     DEFAULT_STATE,
@@ -21,6 +22,7 @@ from .watch import (
     notify_cmd,
     notify_stdout,
     notify_telegram,
+    run_events,
     save_state,
 )
 
@@ -29,8 +31,13 @@ EPILOG = """examples:
   ocshepherd list
   ocshepherd tail auth-refactor 15
   ocshepherd send auth-refactor "also add a test for the empty case"
-  ocshepherd watch                        # one-shot check (use with cron/systemd)
-  ocshepherd watch --loop 120             # keep running
+  ocshepherd watch                        # one-shot check (cron/systemd)
+  ocshepherd watch --events               # event-driven (long-running, light)
+  ocshepherd watch --loop 120             # polling loop
+  ocshepherd config set remind_after_minutes 30
+  ocshepherd new --dir ~/work/proj --title "notes" --prompt "summarise the repo"
+  ocshepherd abort auth-refactor          # interrupt a running session
+  ocshepherd close auth-refactor --yes    # delete a session
   ssh devbox ocshepherd snapshot | ocshepherd watch --stdin   # remote, piped
 """
 
@@ -243,12 +250,63 @@ def cmd_resolve(args):
     print("%s  %s" % (session["id"], session.get("title") or ""))
 
 
+def _load_settings(args):
+    """Merge settings: CLI flag > env (via parser defaults) > config file > default."""
+    cfg = load_config()
+
+    def pick(key, attr):
+        value = getattr(args, attr, None)
+        if value is not None:
+            return value
+        return cfg.get(key)
+
+    return {
+        "enabled": bool(cfg.get("enabled", True)),
+        "remind": pick("remind_after_minutes", "remind_after_minutes"),
+        "snippet": pick("snippet", "snippet") or 220,
+        "state": pick("state", "state") or str(DEFAULT_STATE),
+        "telegram_token": pick("telegram_token", "telegram_token"),
+        "telegram_chat": pick("telegram_chat", "telegram_chat"),
+        "notify_cmd": pick("notify_cmd", "notify_cmd"),
+        "resync_minutes": pick("resync_minutes", "resync_minutes") or 30,
+        "min_interval_seconds": pick("min_interval_seconds", "min_interval") or 15,
+        "max_fails": getattr(args, "max_fails", None) or 3,
+        "fail_cooldown_hours": getattr(args, "fail_cooldown_hours", None) or 6,
+    }
+
+
+def _emit(text, settings, quiet=False):
+    if not text:
+        return
+    if not quiet:
+        notify_stdout(text)
+    if settings.get("telegram_token") and settings.get("telegram_chat"):
+        notify_telegram(text, settings["telegram_token"], settings["telegram_chat"])
+    if settings.get("notify_cmd"):
+        notify_cmd(text, settings["notify_cmd"])
+
+
 def cmd_watch(args):
+    if args.events:
+        if args.stdin or args.snapshot or args.loop:
+            die("--events cannot be combined with --stdin/--snapshot/--loop")
+        settings = _load_settings(args)
+        try:
+            run_events(
+                make_client(args),
+                lambda: _load_settings(args),
+                lambda text: _emit(text, settings, args.quiet),
+            )
+        except KeyboardInterrupt:
+            pass
+        return
+
     if args.loop and (args.stdin or args.snapshot):
         die("--loop cannot be combined with --stdin/--snapshot (snapshot would go stale)")
 
     def run_once():
-        state = load_state(args.state)
+        settings = _load_settings(args)  # fresh each run: config edits apply live
+        state = load_state(settings["state"])
         alerts = []
         try:
             if args.snapshot:
@@ -260,31 +318,28 @@ def cmd_watch(args):
                     raise ValueError("no snapshot data on stdin")
                 snap = json.loads(raw)
             else:
-                client = make_client(args)
-                snap = build_snapshot(client)
+                snap = build_snapshot(make_client(args))
             if "sessions" not in snap:
                 raise ValueError("invalid snapshot (missing 'sessions')")
             clear_fails(state)
-            alerts = check(snap, state, snippet=args.snippet)
+            alerts = check(
+                snap, state,
+                snippet=settings["snippet"],
+                remind_after_minutes=settings["remind"],
+                enabled=settings["enabled"],
+            )
         except SystemExit:
             raise
         except Exception as e:
             alert = fail_alert(
                 state, e,
-                max_fails=args.max_fails,
-                cooldown_hours=args.fail_cooldown_hours,
+                max_fails=settings["max_fails"],
+                cooldown_hours=settings["fail_cooldown_hours"],
             )
             if alert:
                 alerts = [alert]
-        save_state(args.state, state)
-        text = format_alerts(alerts)
-        if text:
-            if not args.quiet:
-                notify_stdout(text)
-            if args.telegram_token and args.telegram_chat:
-                notify_telegram(text, args.telegram_token, args.telegram_chat)
-            if args.notify_cmd:
-                notify_cmd(text, args.notify_cmd)
+        save_state(settings["state"], state)
+        _emit(format_alerts(alerts), settings, args.quiet)
 
     if args.loop:
         try:
@@ -295,6 +350,63 @@ def cmd_watch(args):
             pass
     else:
         run_once()
+
+
+def cmd_config(args):
+    cfg = load_config()
+    op = getattr(args, "op", None) or "list"
+    if op == "list":
+        print(json.dumps(cfg, indent=2, ensure_ascii=False))
+    elif op == "get":
+        if not args.key:
+            die("usage: ocshepherd config get <key>")
+        print(json.dumps(cfg.get(args.key)))
+    elif op == "set":
+        if not args.key or args.value is None:
+            die("usage: ocshepherd config set <key> <value>")
+        cfg[args.key] = coerce(args.value)
+        save_config(cfg)
+        print("%s = %s" % (args.key, json.dumps(cfg[args.key])))
+    elif op == "unset":
+        if not args.key:
+            die("usage: ocshepherd config unset <key>")
+        cfg.pop(args.key, None)
+        save_config(cfg)
+        print("unset %s" % args.key)
+    else:
+        die("unknown config op: %s" % op)
+
+
+def cmd_new(args):
+    client = make_client(args)
+    directory = args.dir or os.getcwd()
+    data = client.create_session(title=args.title, directory=directory, agent=args.agent)
+    sid = data.get("id")
+    if not sid:
+        die("could not create session: %s" % json.dumps(data)[:300])
+    print("new session: %s  %r  (%s)" % (sid, data.get("title") or "", directory))
+    if args.prompt:
+        sent = client.send(sid, args.prompt)
+        print("prompt sent: id=%s delivery=%s" % (
+            (sent or {}).get("id"), (sent or {}).get("delivery")))
+
+
+def cmd_close(args):
+    client = make_client(args)
+    session = resolve_or_die(client, args.fragment)
+    if not args.yes:
+        print("would delete: %s  %r — re-run with --yes to confirm" % (
+            session["id"], session.get("title") or ""))
+        return
+    client.delete_session(session["id"])
+    print("deleted %s  %r" % (session["id"], session.get("title") or ""))
+
+
+def cmd_abort(args):
+    client = make_client(args)
+    session = resolve_or_die(client, args.fragment)
+    result = client.interrupt_session(session["id"])
+    print(("interrupt %s -> %s" % (session["id"], json.dumps(result)))[:220])
 
 
 def build_parser():
@@ -371,13 +483,21 @@ def build_parser():
 
     p = sub.add_parser(
         "watch",
-        help="check sessions and notify about new events (one-shot; ideal for cron)",
+        help="check sessions and notify about new events (one-shot, --loop or --events)",
     )
     add_client_args(p)
+    p.add_argument("--events", action="store_true",
+                   help="event-driven mode: stream the opencode event bus and check on turn/permission/form events")
     p.add_argument("--stdin", action="store_true", help="read the snapshot from stdin")
     p.add_argument("--snapshot", help="read the snapshot from a file")
-    p.add_argument("--state", default=str(DEFAULT_STATE), help="state file path")
-    p.add_argument("--snippet", type=int, default=220, help="max chars of last-message snippets")
+    p.add_argument("--state", default=None, help="state file path (overrides config)")
+    p.add_argument("--snippet", type=int, default=None, help="max chars of last-message snippets")
+    p.add_argument("--remind-after-minutes", type=int, default=None,
+                   help="re-notify every N minutes while an item is still waiting")
+    p.add_argument("--resync-minutes", type=int, default=None,
+                   help="--events: full-check safety net interval (default 30)")
+    p.add_argument("--min-interval", type=int, default=None,
+                   help="--events: minimum seconds between checks (default 15)")
     p.add_argument("--loop", type=int, metavar="SECONDS", help="keep running, checking every N seconds")
     p.add_argument("--telegram-token", default=os.environ.get("OCSHEPHERD_TELEGRAM_TOKEN"))
     p.add_argument("--telegram-chat", default=os.environ.get("OCSHEPHERD_TELEGRAM_CHAT"))
@@ -387,6 +507,31 @@ def build_parser():
                    help="consecutive failed runs before a connectivity alert")
     p.add_argument("--fail-cooldown-hours", type=float, default=6)
     p.set_defaults(func=cmd_watch)
+
+    p = sub.add_parser("config", help="show or change persistent settings")
+    p.add_argument("op", nargs="?", default="list", choices=["list", "get", "set", "unset"])
+    p.add_argument("key", nargs="?")
+    p.add_argument("value", nargs="?")
+    p.set_defaults(func=cmd_config)
+
+    p = sub.add_parser("new", help="create a new session")
+    add_client_args(p)
+    p.add_argument("--dir", help="working directory (default: current)")
+    p.add_argument("--title", help="session title")
+    p.add_argument("--agent", help="agent to use")
+    p.add_argument("--prompt", help="send this first message after creating")
+    p.set_defaults(func=cmd_new)
+
+    p = sub.add_parser("close", help="delete a session (needs --yes)")
+    add_client_args(p)
+    p.add_argument("fragment")
+    p.add_argument("--yes", action="store_true", help="confirm deletion")
+    p.set_defaults(func=cmd_close)
+
+    p = sub.add_parser("abort", help="interrupt a running session")
+    add_client_args(p)
+    p.add_argument("fragment")
+    p.set_defaults(func=cmd_abort)
 
     return parser
 

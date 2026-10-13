@@ -125,6 +125,51 @@ class CheckTests(unittest.TestCase):
         self.assertIn("opencode-shepherd", text)
         self.assertIn("one", text)
 
+    def test_reminder_after_threshold_repeats(self):
+        st = self.fresh_state()
+        st["seeded"] = True
+        s = sess("ses_r", form=[{"id": "f9", "title": "Q", "fields": [
+            {"key": "k", "type": "string", "title": "Pick"}]}])
+        t0 = NOW
+        alerts = check(snap([s]), st, now_ms=t0, remind_after_minutes=30)
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(check(snap([s]), st, now_ms=t0 + 10 * 60000,
+                               remind_after_minutes=30), [])
+        alerts = check(snap([s]), st, now_ms=t0 + 31 * 60000,
+                       remind_after_minutes=30)
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("Still waiting", alerts[0])
+        alerts = check(snap([s]), st, now_ms=t0 + 62 * 60000,
+                       remind_after_minutes=30)
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("Still waiting", alerts[0])
+        self.assertEqual(check(snap([s]), st, now_ms=t0 + 63 * 60000,
+                               remind_after_minutes=30), [])
+
+    def test_disabled_suppresses_then_recap_on_resume(self):
+        st = self.fresh_state()
+        st["seeded"] = True
+        s = sess("ses_o", form=[{"id": "f8", "title": "Q", "fields": [
+            {"key": "k", "type": "string", "title": "Pick", "options": [
+                {"value": "a", "label": "A"}]}]}])
+        self.assertEqual(check(snap([s]), st, now_ms=NOW, enabled=False), [])
+        self.assertIn("form:f8", st["seen"])
+        self.assertEqual(check(snap([s]), st, now_ms=NOW + 1000, enabled=False), [])
+        alerts = check(snap([s]), st, now_ms=NOW + 2000, enabled=True)
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("resumed", alerts[0])
+        self.assertIn("ses_o", alerts[0])
+
+    def test_deferred_idle_sets_meta(self):
+        st = self.fresh_state()
+        st["seeded"] = True
+        s = sess("ses_dm", last={"type": "idle", "ts": NOW - 10_000,
+                                 "outcome": "succeeded"})
+        meta = {}
+        alerts = check(snap([s]), st, now_ms=NOW, meta=meta)
+        self.assertEqual(alerts, [])
+        self.assertTrue(meta.get("deferred_idle"))
+
 
 if __name__ == "__main__":
     unittest.main()

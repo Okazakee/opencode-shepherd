@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "opencode-shepherd",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Watch over opencode sessions and respond when they need you — alerts for stopped turns, pending questions and permission requests, and a dependency-free CLI to reply from anywhere.",
   "author": {
     "name": "okazakee",

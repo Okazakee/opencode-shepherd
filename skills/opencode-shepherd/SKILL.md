@@ -40,6 +40,10 @@ ocshepherd form-reply <frag> --answer q0="value"
 ocshepherd perms <frag>            # pending permission requests
 ocshepherd perm <frag> once|always|reject [--message "..."]
 ocshepherd resolve <frag>          # disambiguate a session by id/title fragment
+ocshepherd new --dir DIR [--title T] [--prompt M]   # create a session
+ocshepherd abort <frag>            # interrupt a running session
+ocshepherd close <frag> [--yes]    # delete a session
+ocshepherd config list|get|set|unset ...            # persistent settings
 ```
 
 `<frag>` = session id fragment (case-insensitive substring) or title substring.
@@ -49,9 +53,32 @@ Ambiguous -> prints candidates, exit 2. No match -> exit 3.
 
 ```bash
 ocshepherd watch                                          # one-shot; silent unless something new
-ocshepherd watch --loop 120                               # long-running
+ocshepherd watch --loop 120                               # polling loop
+ocshepherd watch --events                                 # event-driven (long-running, light)
 ssh box ocshepherd snapshot | ocshepherd watch --stdin    # remote over SSH
 ```
+
+Settings (optional, live-reloaded from `~/.config/ocshepherd/config.json`):
+`enabled` (pause/resume notifications; on resume a recap lists what is
+waiting), `remind_after_minutes` (re-notify while something waits),
+`telegram_token`/`telegram_chat`, `notify_cmd`, `resync_minutes`,
+`min_interval_seconds` — manage with `ocshepherd config set KEY VALUE`.
+
+### Setting it up where opencode runs (for the agent)
+
+The CLI must run on a machine that can reach the opencode server (localhost
+or via SSH):
+
+1. Check: `ocshepherd --version` on the host where opencode runs
+   (`ssh HOST ocshepherd --version` for remote setups).
+2. If missing, install it there:
+   `pipx install git+https://github.com/okazakee/opencode-shepherd`
+   (or `python3 -m pip install --user` as fallback); verify with `ocshepherd ping`.
+3. Wire up watching:
+   - remote setup: `ssh HOST ocshepherd snapshot | ocshepherd watch --stdin` (cron/timer here),
+   - local setup: `ocshepherd watch` in cron, or a long-running
+     `ocshepherd watch --events` under systemd (see `examples/systemd/`).
+4. Pause/steer anytime: `ocshepherd config set enabled false|true`.
 
 Sinks: stdout (default), `--telegram-token` + `--telegram-chat`, or
 `--notify-cmd` (alert text on stdin; works with ntfy, webhooks, mail...).

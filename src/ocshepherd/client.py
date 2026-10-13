@@ -11,9 +11,11 @@ from __future__ import annotations
 import base64
 import json
 import os
+import queue
 import re
 import shutil
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -215,6 +217,99 @@ class Client:
             "POST", "/session/%s/form/%s/reply" % (sid, form_id),
             data={"answer": answer},
         )
+
+    def create_session(self, title=None, directory=None, agent=None):
+        body = {}
+        if title:
+            body["title"] = title
+        if agent:
+            body["agent"] = agent
+        if directory:
+            body["location"] = {"directory": directory}
+        d = self.request("POST", "/session", data=body) or {}
+        return d.get("data") or {}
+
+    def delete_session(self, sid):
+        return self.request("DELETE", "/session/%s" % sid)
+
+    def interrupt_session(self, sid):
+        return self.request("POST", "/session/%s/interrupt" % sid)
+
+
+class EventStream:
+    """Background SSE reader for the opencode event bus (``GET /api/event``).
+
+    Runs a daemon thread that keeps a streaming connection alive and pushes
+    parsed event dicts into a queue. On disconnect it pushes
+    ``{"type": "_disconnect", "error": ...}`` and reconnects with backoff.
+    ``server.connected`` is emitted by the server on (re)connect — callers can
+    treat it as "do a full resync". Heartbeat comment lines are ignored.
+    """
+
+    def __init__(self, client, retry_seconds=5):
+        self.client = client
+        self.retry_seconds = retry_seconds
+        self.queue = queue.Queue()
+        self._stop = threading.Event()
+        self._thread = None
+
+    def start(self):
+        if self._thread and self._thread.is_alive():
+            return
+        self._thread = threading.Thread(target=self._run, name="ocshepherd-events", daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+
+    def get(self, timeout=1.0):
+        """Pop one event; returns None on timeout."""
+        try:
+            return self.queue.get(timeout=timeout)
+        except queue.Empty:
+            return None
+
+    def _run(self):
+        backoff = self.retry_seconds
+        while not self._stop.is_set():
+            reason = "stream ended"
+            try:
+                self._connect_and_read()
+                backoff = self.retry_seconds
+            except Exception as e:
+                reason = str(e)[:200]
+            if self._stop.is_set():
+                return
+            self.queue.put({"type": "_disconnect", "error": reason})
+            self._stop.wait(backoff)
+            backoff = min(backoff * 2, 60)
+
+    def _connect_and_read(self):
+        req = urllib.request.Request(self.client.url + self.client.api_prefix + "/event")
+        for key, value in self.client._headers().items():
+            req.add_header(key, value)
+        req.add_header("Accept", "text/event-stream")
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data_lines = []
+            for raw in resp:
+                if self._stop.is_set():
+                    return
+                line = raw.decode("utf-8", "replace").rstrip("\r\n")
+                if line.startswith(":"):
+                    continue  # heartbeat / comment
+                if line == "":
+                    if data_lines:
+                        payload = "\n".join(data_lines)
+                        data_lines = []
+                        try:
+                            event = json.loads(payload)
+                            if isinstance(event, dict):
+                                self.queue.put(event)
+                        except Exception:
+                            pass
+                    continue
+                if line.startswith("data:"):
+                    data_lines.append(line[5:].lstrip())
 
 
 def format_ms(ms):

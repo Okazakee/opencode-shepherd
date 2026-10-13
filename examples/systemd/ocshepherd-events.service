@@ -1,0 +1,15 @@
+[Unit]
+Description=opencode-shepherd event-driven watch (notify when opencode sessions need attention)
+After=network-online.target
+
+[Service]
+Type=simple
+# Put OCSHEPHERD_TELEGRAM_TOKEN / OCSHEPHERD_TELEGRAM_CHAT (or other config)
+# in ~/.config/ocshepherd.env — or set them via `ocshepherd config set`.
+EnvironmentFile=-%h/.config/ocshepherd.env
+ExecStart=%h/.local/bin/ocshepherd watch --events --quiet
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
