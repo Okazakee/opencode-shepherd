@@ -32,6 +32,8 @@ class ConfigTests(unittest.TestCase):
                 again = cfgmod.load_config()
                 self.assertEqual(again["remind_after_minutes"], 30)
                 self.assertTrue(str(cfgmod.config_path()).startswith(td))
+                mode = os.stat(cfgmod.config_path()).st_mode & 0o777
+                self.assertEqual(mode, 0o600)
             finally:
                 if old is None:
                     os.environ.pop("XDG_CONFIG_HOME", None)

@@ -2,8 +2,8 @@
 
 Auth model (matches `opencode serve`/`opencode web`): HTTP Basic with
 username `opencode` (override with OPENCODE_SERVER_USERNAME) and a password
-(OPENCODE_SERVER_PASSWORD for manually started servers; the background
-service writes its own generated password to ~/.config/opencode/service.json).
+supplied by the operator (OCSHEPHERD_PASSWORD / OPENCODE_SERVER_PASSWORD, or
+an explicit --password).
 """
 
 from __future__ import annotations
@@ -20,10 +20,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from pathlib import Path
 
 DEFAULT_URL = "http://127.0.0.1:4096"
-SERVICE_JSON = Path.home() / ".config" / "opencode" / "service.json"
 
 
 class ShepherdError(Exception):
@@ -56,18 +54,11 @@ def discover_url() -> str:
 
 
 def discover_password():
-    """Resolve the service password: explicit > OCSHEPHERD_PASSWORD >
-    service.json (background service) > OPENCODE_SERVER_PASSWORD."""
+    """Resolve the service password: OCSHEPHERD_PASSWORD, then
+    OPENCODE_SERVER_PASSWORD. An explicit --password always wins upstream."""
     v = os.environ.get("OCSHEPHERD_PASSWORD")
     if v:
         return v
-    try:
-        with open(SERVICE_JSON) as f:
-            data = json.load(f)
-        if isinstance(data, dict) and data.get("password"):
-            return str(data["password"])
-    except Exception:
-        pass
     return os.environ.get("OPENCODE_SERVER_PASSWORD")
 
 

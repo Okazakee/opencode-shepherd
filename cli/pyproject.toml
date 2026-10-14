@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opencode-shepherd"
-version = "0.2.4"
+version = "0.2.5"
 description = "Watch over opencode sessions and respond when they need you: alerts for stopped turns, questions and permissions, plus a dependency-free CLI and watcher for the opencode v2 server."
 readme = "README.md"
 requires-python = ">=3.9"

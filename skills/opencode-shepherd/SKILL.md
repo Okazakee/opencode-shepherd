@@ -20,13 +20,13 @@ status, alerts when a session stops or asks something, and replies.
 ## Prerequisite check
 
 ```bash
-ocshepherd ping     # auto-discovers URL + password; prints the active session count
+ocshepherd ping     # reachability + active session count (URL auto-detected)
 ```
 
 If `ocshepherd` is not installed:
 
 ```bash
-pipx install git+https://github.com/okazakee/opencode-shepherd
+pipx install "git+https://github.com/okazakee/opencode-shepherd#subdirectory=cli"
 ```
 
 ## Core commands
@@ -66,13 +66,17 @@ waiting), `remind_after_minutes` (re-notify while something waits),
 
 ### Setting it up where opencode runs (for the agent)
 
+**Ask first.** Installing the CLI, adding a cron entry and enabling a systemd
+unit change the user's machine: confirm with the user before doing any of
+them, then proceed.
+
 The CLI must run on a machine that can reach the opencode server (localhost
 or via SSH):
 
 1. Check: `ocshepherd --version` on the host where opencode runs
    (`ssh HOST ocshepherd --version` for remote setups).
 2. If missing, install it there:
-   `pipx install git+https://github.com/okazakee/opencode-shepherd`
+   `pipx install "git+https://github.com/okazakee/opencode-shepherd#subdirectory=cli"`
    (or `python3 -m pip install --user` as fallback); verify with `ocshepherd ping`.
 3. Wire up watching:
    - remote setup: `ssh HOST ocshepherd snapshot | ocshepherd watch --stdin` (cron/timer here),
@@ -97,11 +101,12 @@ Alert semantics (why silence is the norm):
 
 ## Credentials
 
-Auto-discovered, in order. URL: `--url` → `$OCSHEPHERD_URL` →
-`opencode service status` → `http://127.0.0.1:4096`. Password: `--password` →
-`$OCSHEPHERD_PASSWORD` → `~/.config/opencode/service.json` →
-`$OPENCODE_SERVER_PASSWORD`. Username defaults to `opencode`.
-Never print the password; never bind the opencode server beyond localhost.
+URL: `--url` → `$OCSHEPHERD_URL` → `opencode service status` →
+`http://127.0.0.1:4096`. Password: `--password` → `$OCSHEPHERD_PASSWORD` →
+`$OPENCODE_SERVER_PASSWORD` (operator-provided; never read from other tools'
+files). Username defaults to `opencode`. Scheduled watchers should take the
+password from an environment file (see `examples/systemd/`). Never print the
+password; never bind the opencode server beyond localhost.
 
 ## Pitfalls
 

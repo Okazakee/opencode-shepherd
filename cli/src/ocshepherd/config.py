@@ -58,9 +58,13 @@ def save_config(cfg: dict) -> None:
     path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = str(path) + ".tmp"
-    with open(tmp, "w") as f:
+    # The file can hold secrets (Telegram bot token): create it 0600 and
+    # re-apply the mode before the rename, since open() masks with the umask.
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
         json.dump(cfg, f, indent=2)
         f.write("\n")
+    os.chmod(tmp, 0o600)
     os.replace(tmp, path)
 
 

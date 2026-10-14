@@ -22,22 +22,22 @@ Long agent sessions behave like a slow colleague: they finish a step and wait, t
 
 ## Install
 
-As a Hermes plugin (skills-only, no Python: your agent learns how to set up and use the CLI for you):
+As a Hermes plugin (skills-only: Hermes loads no Python from it; your agent learns how to set up and use the CLI for you):
 
 ```bash
 hermes plugins install okazakee/opencode-shepherd
 ```
 
-The standalone CLI goes on the machine that can reach the opencode server:
+The standalone CLI (source in [`cli/`](cli/)) goes on the machine that can reach the opencode server:
 
 ```bash
-pipx install git+https://github.com/okazakee/opencode-shepherd   # recommended
+pipx install "git+https://github.com/okazakee/opencode-shepherd#subdirectory=cli"   # recommended
 # or
-pip install git+https://github.com/okazakee/opencode-shepherd
+python3 -m pip install --user "git+https://github.com/okazakee/opencode-shepherd#subdirectory=cli"
 ```
 
 - Requires **Python ≥ 3.9** and a running **opencode v2** (`opencode serve`, the background service, or a TUI; tested with v2.0.28).
-- Credentials are found automatically (see [Good to know](#good-to-know)).
+- Credentials: URL auto-detected, password via env or flag (see [Good to know](#good-to-know)).
 
 ## 30-second tour
 
@@ -93,7 +93,7 @@ ocshepherd config set enabled true    # resume: one recap of what's waiting righ
 
 ## Configuration
 
-Settings live in `~/.config/ocshepherd/config.json` (every key optional) and are read live, no restart needed:
+Settings live in `~/.config/ocshepherd/config.json` (every key optional, written with mode `0600`) and are read live, no restart needed:
 
 ```bash
 ocshepherd config list
@@ -152,7 +152,7 @@ ssh devbox ocshepherd send fix-auth "text..."
 
 ## How the Hermes plugin works
 
-The plugin is skills-only (no Python): it ships the `opencode-shepherd` skill, which teaches a Hermes agent how to install `ocshepherd` where opencode runs, how to set up watching and notifications, and how to reply to sessions on your behalf. The CLI itself stays a standalone distribution that works with or without Hermes.
+The plugin is skills-only (no Python): it ships the `opencode-shepherd` skill, which teaches a Hermes agent how to install `ocshepherd` where opencode runs, how to set up watching and notifications, and how to reply to sessions on your behalf. The CLI itself stays a standalone distribution (source under [`cli/`](cli/)) that works with or without Hermes.
 
 ## All commands
 
@@ -172,7 +172,7 @@ The plugin is skills-only (no Python): it ships the `opencode-shepherd` skill, w
 
 ## Good to know
 
-- **Credentials** are auto-discovered: URL from `$OCSHEPHERD_URL` → `opencode service status` → `http://127.0.0.1:4096`; password from `$OCSHEPHERD_PASSWORD` → `~/.config/opencode/service.json` → `$OPENCODE_SERVER_PASSWORD`; username defaults to `opencode`. Override with `--url/--password/--username`.
+- **Credentials** are auto-discovered: URL from `$OCSHEPHERD_URL` → `opencode service status` → `http://127.0.0.1:4096`; password from `$OCSHEPHERD_PASSWORD` → `$OPENCODE_SERVER_PASSWORD`; username defaults to `opencode`. Override with `--url/--password/--username`. Scheduled watchers should set the password in an environment file (see [`examples/systemd/`](examples/systemd/)).
 - **steer vs queue**: `send` steers by default (delivered even mid-turn); `--queue` waits for the current turn to end.
 - **Repeat safety**: alerts are deduplicated by event id, and the first `watch` run only seeds state, so no old noise.
 - **API caveats**: built and tested against the opencode **v2** server API (spec at `http://<host>:<port>/doc`). The API is young; if your version is newer, check the spec after upgrades. The v1 server API is not supported. Escape hatch: `opencode api GET /api/session`.
@@ -181,7 +181,7 @@ The plugin is skills-only (no Python): it ships the `opencode-shepherd` skill, w
 
 - Nothing listens and nothing is exposed: the tool only calls the opencode server over HTTP (or runs over your existing SSH).
 - If you configure a notification sink (Telegram, `notify_cmd`), the tool makes network calls to that service. Nothing else leaves the machine.
-- Credentials are never printed or logged. On shared machines prefer the env var or `service.json` over `--password` (visible in the process list).
+- Credentials are never printed or logged. On shared machines prefer the env var over `--password` (visible in the process list).
 - `perm`/`form-reply` are real approvals: treat them like clicking approve in the TUI.
 
 ## Related tools
@@ -192,8 +192,10 @@ The plugin is skills-only (no Python): it ships the `opencode-shepherd` skill, w
 
 ## Development
 
+The CLI package lives in [`cli/`](cli/) (`pyproject.toml`, `src/`, `tests/`).
+
 ```bash
-python -m unittest discover -s tests -v
+python -m unittest discover -s cli/tests -v
 ```
 
 ## License
