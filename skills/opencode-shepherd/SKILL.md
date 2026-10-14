@@ -26,7 +26,7 @@ ocshepherd ping     # reachability + active session count (URL auto-detected)
 If `ocshepherd` is not installed:
 
 ```bash
-pipx install "git+https://github.com/okazakee/opencode-shepherd#subdirectory=cli"
+pipx install "git+https://github.com/okazakee/opencode-shepherd@8094dfa67d95470d4eb2737410bf3628f95695be#subdirectory=cli"
 ```
 
 ## Core commands
@@ -76,7 +76,7 @@ or via SSH):
 1. Check: `ocshepherd --version` on the host where opencode runs
    (`ssh HOST ocshepherd --version` for remote setups).
 2. If missing, install it there:
-   `pipx install "git+https://github.com/okazakee/opencode-shepherd#subdirectory=cli"`
+   `pipx install "git+https://github.com/okazakee/opencode-shepherd@8094dfa67d95470d4eb2737410bf3628f95695be#subdirectory=cli"`
    (or `python3 -m pip install --user` as fallback); verify with `ocshepherd ping`.
 3. Wire up watching:
    - remote setup: `ssh HOST ocshepherd snapshot | ocshepherd watch --stdin` (cron/timer here),

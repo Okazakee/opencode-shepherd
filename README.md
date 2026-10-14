@@ -31,10 +31,12 @@ hermes plugins install okazakee/opencode-shepherd
 The standalone CLI (source in [`cli/`](cli/)) goes on the machine that can reach the opencode server:
 
 ```bash
-pipx install "git+https://github.com/okazakee/opencode-shepherd#subdirectory=cli"   # recommended
+pipx install "git+https://github.com/okazakee/opencode-shepherd@8094dfa67d95470d4eb2737410bf3628f95695be#subdirectory=cli"   # recommended
 # or
-python3 -m pip install --user "git+https://github.com/okazakee/opencode-shepherd#subdirectory=cli"
+python3 -m pip install --user "git+https://github.com/okazakee/opencode-shepherd@8094dfa67d95470d4eb2737410bf3628f95695be#subdirectory=cli"
 ```
+
+Both installs pin a full commit SHA (not a tag: tags can move), so you always get the reviewed code.
 
 - Requires **Python ≥ 3.9** and a running **opencode v2** (`opencode serve`, the background service, or a TUI; tested with v2.0.28).
 - Credentials: URL auto-detected, password via env or flag (see [Good to know](#good-to-know)).
